@@ -40,113 +40,63 @@
 <script>
   /* ============================================================
      صفحة رول سوري الدائمة.
-     بتوصل بسيستم جهاز المحل الأول (أسرع وفيه كل الأوردرات)،
-     ولو الجهاز مقفول أو النت فصل بتفتح نسخة جوجل مؤقتًا.
-     وبتفضل تتابع: أول ما جهاز المحل يرجع بترجعله لوحدها.
+     اللينك ده مابيتغيرش أبدًا — لا للعملاء ولا للمدير.
+     بيفتح وسيط جوجل اللي جهاز المحل بيبعتله بياناته:
+        من غير ?page=admin  ->  صفحة طلب العملاء
+        مع   ?page=admin    ->  صفحة متابعة المدير والمالك
      ============================================================ */
 
-  var CLOUD = 'https://script.google.com/a/~/macros/s/AKfycbwo00bxrTichaHZs7cz4SPO7hfeGLyOabkeHirZje2Giiurq9HX7NzhPd33mc9baGgKuA/exec'.replace('/a/~/', '/');
-  var EXTRA = location.search + location.hash;   // زي ?page=admin
+  /* ===== الحاجة الوحيدة اللي تغيّرها: لينك الوسيط (اللي آخره /exec) ===== */
+  var GAS = 'https://abdallh-mostafa2026.github.io/rollsoury/';
+
+  var EXTRA = location.search + location.hash;
+  var IS_ADMIN = /(^|[?&#])page=admin\b/.test(EXTRA);
   var frame = document.getElementById('app');
   var rf    = document.getElementById('rf');
   var msgEl = document.getElementById('msg');
 
-  var current = '';        // اللي شغال في الإطار دلوقتي
-  var busy    = false;
-  var msgT    = null;
+  function target() {
+    var u = String(GAS).replace(/\?.*$/, '').replace(/\/+$/, '');
+    return u + (IS_ADMIN ? '?page=follow' : '');
+  }
+
+  function msg(t) {
+    msgEl.textContent = t;
+    msgEl.style.display = t ? 'block' : 'none';
+    if (t) setTimeout(function () { msgEl.style.display = 'none'; }, 3500);
+  }
 
   frame.onload = function () {
     var sp = document.getElementById('splash');
     if (!sp) return;
-    sp.style.opacity = 0;
-    setTimeout(function () { sp.style.display = 'none'; }, 300);
+    sp.style.opacity = '0';
+    setTimeout(function () { if (sp.parentNode) sp.parentNode.removeChild(sp); }, 300);
   };
 
-  function msg(t, ms) {
-    msgEl.textContent = t;
-    msgEl.style.display = 'block';
-    clearTimeout(msgT);
-    msgT = setTimeout(function () { msgEl.style.display = 'none'; }, ms || 3000);
+  function go() {
+    if (String(GAS).indexOf('/exec') < 0) {
+      var sp = document.getElementById('splash');
+      if (sp) sp.innerHTML = '<div style="max-width:320px;text-align:center;padding:20px;line-height:1.8">'
+        + '<b style="font-size:17px">الصفحة لسه مش متظبطة</b><br>'
+        + 'افتح ملف index.html وحط لينك الوسيط مكان PASTE_YOUR_EXEC_LINK_HERE</div>';
+      return;
+    }
+    frame.src = target() + (IS_ADMIN ? '&' : '?') + 't=' + Date.now();
   }
 
-  // الشريط الأحمر بيظهر لصفحة الإدارة بس. العميل بيطلب عادي من النسخة
-  // الاحتياطية ومحتاجش يتخض.
-  var IS_ADMIN = /(^|[?&#])page=admin\b/.test(EXTRA);
+  rf.onclick = function () {
+    rf.classList.add('busy');
+    msg('بنحدّث…');
+    go();
+    setTimeout(function () { rf.classList.remove('busy'); }, 1200);
+  };
 
-  function show(base) {
-    base = base.replace(/\/+$/, '');
-    var onCloud = (base === CLOUD.replace(/\/+$/, ''));
-    document.body.classList.toggle('offline', onCloud && IS_ADMIN);
-    if (base === current) return;
-    current = base;
-    frame.src = base + EXTRA;
-  }
+  /* أول ما الموبايل يرجع من الخلفية أو النت يرجع، بنحدّث لوحدنا */
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) go(); });
+  window.addEventListener('online', go);
 
-  // بنسأل الجهاز: إنت صاحي؟ لو مردش في ثانيتين ونص يبقى مش موجود
-  function alive(url) {
-    return new Promise(function (ok) {
-      if (!url) return ok(false);
-      var done = false;
-      var t = setTimeout(function () { if (!done) { done = true; ok(false); } }, 2500);
-      fetch(url.replace(/\/+$/, '') + '/health?t=' + Date.now(), { cache: 'no-store', mode: 'cors' })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (j) { if (!done) { done = true; clearTimeout(t); ok(!!(j && j.ok)); } })
-        .catch(function () { if (!done) { done = true; clearTimeout(t); ok(false); } });
-    });
-  }
-
-  // جهاز المحل بيكتب لينكه الحالي في الملف ده لوحده كل ما يتغير
-  function linkOfShop() {
-    return fetch('link.json?t=' + Date.now(), { cache: 'no-store' })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) { return (j && j.url) ? String(j.url) : ''; })
-      .catch(function () { return ''; });
-  }
-
-  /* بنقرر نفتح إيه:
-     - جهاز المحل صاحي      -> نفتحه (ولو كنا على جوجل نرجعله)
-     - الجهاز مش راد        -> جوجل مؤقتًا
-     اللي بيتغير لوحده: لما لينك الجهاز يتغير أو يرجع بعد ما كان واقع. */
-  function check(manual) {
-    if (busy) return Promise.resolve();
-    busy = true;
-    if (manual) rf.classList.add('busy');
-    return linkOfShop().then(function (shop) {
-      return alive(shop).then(function (up) {
-        if (up) {
-          var back = current && current !== shop.replace(/\/+$/, '');
-          show(shop);
-          if (manual) msg(back ? 'رجعنا لسيستم المحل' : 'كل حاجة شغالة');
-          else if (back) msg('سيستم المحل رجع');
-          return;
-        }
-        // الجهاز مش راد
-        if (!current) { show(CLOUD); return; }
-        if (current !== CLOUD.replace(/\/+$/, '')) {
-          // كنا على الجهاز وهو وقع -> ننزل على جوجل مؤقتًا
-          show(CLOUD);
-          msg('جهاز المحل مش متاح دلوقتي — فتحنا النسخة الاحتياطية');
-          return;
-        }
-        if (manual) msg('جهاز المحل لسه مش متاح');
-      });
-    }).then(function () {
-      busy = false; rf.classList.remove('busy');
-    }, function () {
-      busy = false; rf.classList.remove('busy');
-      if (!current) show(CLOUD);
-    });
-  }
-
-  rf.onclick = function () { check(true); };
-
-  check(false);                               // أول تحميل
-  setInterval(function () { check(false); }, 20000);   // التحديث التلقائي
-  // لما ترجع للصفحة بعد ما سيبتها، بنتأكد على طول
-  document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) check(false);
-  });
-  window.addEventListener('online', function () { check(false); });
+  go();
+</script>
 </script>
 </body>
 </html>
