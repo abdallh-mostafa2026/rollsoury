@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#D9442A">
+<title>اطلب أونلاين</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#FBF6F1;font-family:Tahoma,Arial,sans-serif;color:#241A16;overflow:hidden}
+#f{position:fixed;inset:0;width:100%;height:100%;border:0;display:none;background:#FBF6F1}
+body.offline #f{top:34px;height:calc(100% - 34px)}
+#bar{position:fixed;inset:0 0 auto 0;height:34px;background:#B3261E;color:#fff;display:none;
+     align-items:center;justify-content:center;font-size:13px;z-index:5;padding:0 10px;text-align:center}
+body.offline #bar{display:flex}
+#sp{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center}
+.dot{width:38px;height:38px;border:3px solid #EADFD6;border-top-color:#D9442A;border-radius:50%;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+h1{font-size:21px;color:#7A2E1E}
+p{color:#6E5D55;font-size:15px;line-height:1.8;max-width:360px}
+a.btn{display:inline-block;margin-top:6px;background:#D9442A;color:#fff;text-decoration:none;
+      padding:13px 22px;border-radius:12px;font-size:16px}
+#esc{position:fixed;left:10px;bottom:10px;z-index:9;display:none;background:rgba(36,26,22,.82);
+     color:#fff;text-decoration:none;font-size:12px;padding:7px 11px;border-radius:9px;line-height:1}
+#rf{position:fixed;left:10px;top:44px;z-index:9;display:none;background:rgba(36,26,22,.75);color:#fff;
+    border:0;font-size:12px;padding:7px 11px;border-radius:9px;cursor:pointer;font-family:inherit}
+body.offline #rf{display:block}
+</style>
+</head>
+<body>
+<div id="bar">إنت على النسخة الاحتياطية — جهاز المحل مقفول، وأي تعديل هنا مش هيوصله.</div>
+<button id="rf">🔄 جرّب تاني</button>
+<iframe id="f" title="الطلب أونلاين" allow="geolocation; clipboard-write"></iframe>
+<a id="esc" href="#" target="_blank" rel="noopener">افتح في صفحة لوحدها ↗</a>
+<div id="sp">
+  <div class="dot"></div>
+  <h1 id="nm">اطلب أونلاين</h1>
+  <p id="m">ثانية واحدة وبنفتحلك…</p>
+  <a class="btn" id="go" href="#" style="display:none">افتح الصفحة</a>
+</div>
+<script>
+(function () {
+  /* الصفحة دي عامة ومفيهاش أي مفتاح. كل اللي بتعرفه بتقراه من link.json
+     اللي جهاز المحل بيكتبه بنفسه، فالملف ده واحد لكل العملاء. */
+  var q = location.search || '', h = location.hash || '';
+  var isAdmin = /(^|[?&])page=(admin|follow)\b/.test(q);
+  var extra = q.replace(/(^|[?&])page=(admin|follow)\b/g, '$1')
+               .replace(/[?&]+$/, '').replace(/^[?&]+/, '');
+  var f = document.getElementById('f'), sp = document.getElementById('sp'),
+      m = document.getElementById('m'), go = document.getElementById('go'),
+      esc = document.getElementById('esc'), rf = document.getElementById('rf');
+  /* نسخة جوجل الاحتياطية بتاعة رول سوري — بتشتغل لما جهاز المحل يكون مقفول */
+  var CLOUD_FIXED = 'https://script.google.com/a/~/macros/s/AKfycbwF3S3_DNifmea5yI2TWh14phjJQq2sEQCiLIe03s9XUI5XGKSbA2NXrJZmVRQa-iKdxA/exec'.replace('/a/~/', '/');
+  var shown = '', busy = false, DEV = '', CLOUD = CLOUD_FIXED, miss = 0;
+
+  function join(base, path, query) {
+    base = String(base || '').replace(/\/+$/, '');
+    var u = base + (path || '');
+    var qs = [];
+    if (query) qs.push(query);
+    if (extra) qs.push(extra);
+    return u + (qs.length ? (u.indexOf('?') >= 0 ? '&' : '?') + qs.join('&') : '') + h;
+  }
+  function devUrl()   { return DEV ? join(DEV, isAdmin ? '/admin' : '/', '') : ''; }
+  function cloudUrl() { return CLOUD ? join(CLOUD, '', isAdmin ? 'page=follow' : '') : ''; }
+
+  function show(u, offline) {
+    if (!u) return;
+    document.body.classList.toggle('offline', !!offline && isAdmin);
+    esc.href = u; esc.style.display = 'block';
+    setTimeout(function () { esc.style.display = 'none'; }, 40000);
+    if (u === shown) { sp.style.display = 'none'; f.style.display = 'block'; return; }
+    /* بنغيّر الوجهة — نوري شاشة الانتظار بدل ما نسيب صفحة قديمة ظاهرة وهي مش بتتحدّث */
+    m.innerHTML = 'ثانية واحدة وبنفتحلك…';
+    go.style.display = 'none';
+    f.style.display = 'none'; sp.style.display = 'flex';
+    shown = u; f.src = u;
+  }
+  function fail(u) {
+    m.innerHTML = 'مش قادرين نفتح الصفحة دلوقتي.';
+    if (u) { go.href = u; go.style.display = 'inline-block'; }
+  }
+  f.onload = function () { sp.style.display = 'none'; f.style.display = 'block'; };
+  /* لو الصفحة اتأخرت جوه الإطار، نسيب للمستخدم طريق تاني بدل ما يفضل مستني */
+  setInterval(function () {
+    if (f.style.display === 'block' || !shown) return;
+    m.innerHTML = 'الصفحة بتاخد وقت — الاتصال بجهاز المحل بطيء شوية.';
+    go.href = shown; go.style.display = 'inline-block'; go.textContent = 'افتح الصفحة في تاب لوحده';
+  }, 12000);
+
+  function alive(u, cb) {
+    if (!u) return cb(false);
+    var done = false, t = setTimeout(function () { if (!done) { done = true; cb(false); } }, 9000);
+    fetch(u.replace(/\/+$/, '') + '/health?t=' + Date.now(), { cache: 'no-store', mode: 'cors' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { if (!done) { done = true; clearTimeout(t); cb(!!(j && j.ok)); } })
+      .catch(function () { if (!done) { done = true; clearTimeout(t); cb(false); } });
+  }
+
+  function check() {
+    if (busy) return;
+    busy = true;
+    fetch('link.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        DEV = (j && j.url) ? String(j.url) : '';
+        if (j && j.name) {             /* اسم المطعم بييجي من الجهاز، فالملف ده واحد لكل العملاء */
+          document.title = String(j.name);
+          var nm = document.getElementById('nm'); if (nm) nm.textContent = String(j.name);
+        }
+        if (j && j.cloud) CLOUD = String(j.cloud);   /* لو الجهاز بعت العنوان بنفسه، بناخده */
+        alive(DEV, function (up) {
+          busy = false;
+          if (up) { miss = 0; return show(devUrl(), false); }
+          /* فحص واحد فاشل مش كفاية — النت ممكن يكون اتأخر ثانية. */
+          miss++;
+          if (miss < 2 && shown && shown === devUrl()) return;
+          if (CLOUD) return show(cloudUrl(), true);
+          fail(devUrl());
+        });
+      })
+      .catch(function () { busy = false; if (CLOUD) show(cloudUrl(), true); else fail(''); });
+  }
+
+  rf.onclick = function () { shown = ''; check(); };
+  check();
+  setInterval(check, 20000);
+  setTimeout(function () { if (f.style.display !== 'block') fail(shown); }, 14000);
+})();
+</script>
+</body>
+</html>
